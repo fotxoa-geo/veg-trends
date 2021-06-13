@@ -52,7 +52,7 @@ class reflectance:
         # Remove duplicates of dates: Keeps the order
         dates = list(OrderedDict.fromkeys(dates))
 
-        for date in tqdm(dates, ncols=80, desc='Layer Stacking', colour='white'):
+        for date in tqdm(dates, ncols=80, desc=os.path.join('Layer Stacking ', modis_product), colour='white'):
             # Get list of HDFS that satisfy the date
             hdfs_date = glob(os.path.join(self.base_directory, "data", modis_product, '*A' + date + '*.hdf'))
 
