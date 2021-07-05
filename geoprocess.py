@@ -5,8 +5,10 @@ from collections import OrderedDict
 import shutil
 import numpy as np
 import pandas as pd
-from osgeo import gdal, _gdalconst
+from osgeo import gdal, osr
 from tqdm import tqdm
+from spectral.io import envi
+
 
 
 class modis_process:
@@ -115,7 +117,11 @@ class modis_process:
         # Function to convert quality bits to strings
         vfunc = np.vectorize(lambda i: type_dict[data_type].format(i))
 
-        for _tif, tif in enumerate(tifs):
+        # Data to write tif files
+        originX, pixelWidth, b, originY, d, pixelHeight = init_tif.GetGeoTransform()
+        driver = gdal.GetDriverByName('GTiff')
+
+        for _tif, tif in tqdm(enumerate(tifs), ncols=80, total=len(tifs), desc='Temporal Stack: ' + modis_product):
             date = os.path.basename(tif).split(".")[0].split("_")[1]
 
             # Open LST - 1st band is day, 2nd band is nighttime
@@ -134,26 +140,88 @@ class modis_process:
                     for _band, band in enumerate(col):
 
                         lst_val = lst_array[_row, _col, _band]
-                        qc_val = qc_array[_row, _col, _band]
                         qc_bit = qc_bits[_row, _col, _band]
 
                         if 7500 <= lst_val <= 65535:
                             if qc_bit[:2] == '00':
                                 if _band == 0:
-                                    temp_stack_day[_row, _col, _band] = lst_val
+                                    temp_stack_day[_row, _col, _tif] = (lst_val * 0.02) - 273.15
                                 else:
-                                    temp_stack_night[_row, _col, _band] = lst_val
+                                    temp_stack_night[_row, _col, _tif] = (lst_val * 0.02) - 273.15
                             else:
                                 if _band == 0:
-                                    temp_stack_day[_row, _col, _band] = 999999
+                                    temp_stack_day[_row, _col, _tif] = 0
                                 else:
-                                    temp_stack_night[_row, _col, _band] = 999999
+                                    temp_stack_night[_row, _col, _tif] = 0
 
                         else:
                             if _band == 0:
-                                temp_stack_day[_row, _col, _band] = 999999
+                                temp_stack_day[_row, _col, _tif] = 0
                             else:
-                                temp_stack_night[_row, _col, _band] = 999999
+                                temp_stack_night[_row, _col, _tif] = 0
+
+        # Save rasters
+        day_raster = (os.path.join(self.output_directory, 'jornada_day_temp' + ".tif"))
+        outRaster = driver.Create(day_raster, init_tif_array.shape[1], init_tif_array.shape[0], len(tifs),
+                                  gdal.GDT_UInt16)
+        outRaster.SetGeoTransform((originX, pixelWidth, 0, originY, 0, pixelHeight))
+
+        # Loop over all bands.
+        for b in range(len(tifs)):
+            outband = outRaster.GetRasterBand(b + 1)
+            outband.WriteArray(temp_stack_day[:, :, b])
+            outband.SetNoDataValue(0)
+
+        # setteing srs from input tif file.
+        prj = init_tif.GetProjection()
+        outRasterSRS = osr.SpatialReference(wkt=prj)
+        outRaster.SetProjection(outRasterSRS.ExportToWkt())
+        outband.FlushCache()
+
+        night_raster = (os.path.join(self.output_directory, 'jornada_night_temp' + ".tif"))
+        outRaster = driver.Create(night_raster, init_tif_array.shape[1], init_tif_array.shape[0], len(tifs),
+                                  gdal.GDT_UInt16)
+        outRaster.SetGeoTransform((originX, pixelWidth, 0, originY, 0, pixelHeight))
+
+        # Loop over all bands.
+        for b in range(len(tifs)):
+            outband = outRaster.GetRasterBand(b + 1)
+            outband.WriteArray(temp_stack_night[:, :, b])
+            outband.SetNoDataValue(0)
+
+        # setteing srs from input tif file.
+        prj = init_tif.GetProjection()
+        outRasterSRS = osr.SpatialReference(wkt=prj)
+        outRaster.SetProjection(outRasterSRS.ExportToWkt())
+        outband.FlushCache()
+
+
+        # # Metadata for envi files
+        # meta = {
+        #     'lines': lst_array.shape[0],
+        #     'samples': lst_array.shape[1],
+        #     'bands': len(tifs),
+        #     'interleave': 'bil',
+        #     'data type': 4,
+        #     'file_type': 'ENVI Standard',
+        #     'byte order': 0,
+        #     'header offset': 0,
+        # }
+        #
+        # # Save daytime temp to .bil format
+        # outDataset_lst = envi.create_image(os.path.join(self.output_directory, 'jornada_day_temp' + ".hdr"),
+        #                                    meta, ext='', force=True)
+        # mm = outDataset_lst.open_memmap(interleave='bip', writable=True)
+        # mm[...] = temp_stack_day
+        # del mm
+        #
+        # # Save nighttime temp to .bil format
+        # outDataset_lst = envi.create_image(os.path.join(self.output_directory, 'jornada_night_temp' + ".hdr"),
+        #                                    meta, ext='', force=True)
+        # mm = outDataset_lst.open_memmap(interleave='bip', writable=True)
+        # mm[...] = temp_stack_night
+        # del mm
+
 
 
 

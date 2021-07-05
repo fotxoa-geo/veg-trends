@@ -1,6 +1,7 @@
 import geoprocess
 import argparse
 from osgeo import _gdalconst
+import trend_analysis
 
 
 def run_preprocess(base_directory: str, instrument: str):
@@ -17,6 +18,12 @@ def run_preprocess(base_directory: str, instrument: str):
     #                no_data=255)
     gp.temporal_stack(search_kw='LST_', modis_product='MOD11A2', data_type='8-bit')
 
+def trends(base_directory: str, instrument: str):
+    tr = trend_analysis.trends(base_directory=base_directory, instrument=instrument)
+    #tr.mann_kendall()
+    tr.climate_anomalies(year_start=2001, year_end=2020)
+
+
 
 def main():
     parser = argparse.ArgumentParser(description='Run vegetation trend workflow')
@@ -28,6 +35,9 @@ def main():
 
     if args.mode in ['preprocess']:
         run_preprocess(base_directory=args.bd, instrument=args.ins)
+
+    if args.mode in ['trends']:
+        trends(base_directory=args.bd, instrument=args.ins)
 
 
 if __name__ == '__main__':
