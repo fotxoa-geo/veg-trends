@@ -208,7 +208,7 @@ class trends:
                 axes = axes.flatten()
 
                 for _ax, ax in enumerate(axes):
-                    if _ax == 0:
+                    if _data_plot == 0:
                         vmin = np.nanmin(temp_avg)
                         vmax = np.nanmax(temp_avg)
                     else:
@@ -220,12 +220,13 @@ class trends:
 
                 fig.subplots_adjust(right=0.8)
                 cbar_ax = fig.add_axes([0.85, 0.15, 0.05, 0.7])
-                fig.colorbar(pcm, ax=cbar_ax)
+                fig.colorbar(pcm, cax=cbar_ax)
                 plt.savefig(os.path.join(self.output_figure_directory, p_name + '_' + names[_data_plot] +'.png'), dpi=300)
                 plt.clf()
 
             # Plot anomaly data
-            for _anom, anom in tqdm(enumerate(anom_arrays), ncols=80, total=len(arrays), desc='Loading Anomalies...'):
+            years = range(year_start, year_end + 1)
+            for _anom, anom in tqdm(enumerate(anom_arrays), ncols=80, total=len(anom_arrays), desc='Loading Anomalies...'):
                 anom[anom == 0] = np.nan
                 anom[anom == -9999] = np.nan
                 fig = plt.figure(figsize=(20, 20))
@@ -238,18 +239,34 @@ class trends:
                     for col in range(ncols):
                         ax = fig.add_subplot(gs[row, col])
                         idx = row + col * nrows
+                        ax.set_title(str(years[idx]))
 
                         try:
-                            pcm = ax.imshow(anom[:, :, idx], vmin=np.nanmin(anom), vmax=np.nanmax(anom))
+                            pcm = ax.imshow(anom[:, :, idx], vmin=np.nanmin(anom), vmax=np.nanmax(anom),
+                                            cmap='coolwarm')
                         except:
                             pass
 
                 fig.subplots_adjust(right=0.8)
                 cbar_ax = fig.add_axes([0.85, 0.15, 0.05, 0.7])
-                fig.colorbar(pcm, ax=cbar_ax)
+                fig.colorbar(pcm, cax=cbar_ax)
                 plt.savefig(os.path.join(self.output_figure_directory, p_name + "_anomaly_" + seasons_key[_anom]
                                          + '.png'), dpi=300)
                 plt.clf()
+
+            # Create figure - data available
+            fig, ax = plt.subplots(figsize=(20, 20))
+            data_available_array[data_available_array == 0] = np.nan
+            data_available_array[data_available_array == -9999] = np.nan
+
+            pcm = ax.imshow(data_available_array[:, :], vmin=0, vmax=1, cmap='coolwarm')
+            ax.set_title('% of data available (979 possible samples)')
+
+            fig.subplots_adjust(right=0.8)
+            cbar_ax = fig.add_axes([0.85, 0.15, 0.05, 0.7])
+            fig.colorbar(pcm, cax=cbar_ax)
+            plt.savefig(os.path.join(self.output_figure_directory, p_name + "_data_available" + '.png'), dpi=300)
+            plt.clf()
 
     def mann_kendall(self):
         # Read data into arrays
